@@ -23,6 +23,11 @@ const GLib = imports.gi.GLib;
 const Gio = imports.gi.Gio;
 const St = imports.gi.St;
 const Shell = imports.gi.Shell;
+
+const PanelMenu = imports.ui.panelMenu;
+const PopupMenu = imports.ui.popupMenu;
+const Main = imports.ui.main;
+
 const Lang = imports.lang;
 
 const cpu_path = '/sys/devices/system/cpu/';
@@ -64,6 +69,58 @@ function rd_nums_frm_file(file) {
     return parseInts(rd_frm_file(file));
 }
 
+function num_to_freq(num) {
+    num = Math.round(num);
+    if (num < 1000)
+        return num + 'kHz';
+    if (num < 1000000)
+        return Math.round(num) / 1000 + 'MHz';
+    if (num < 1000000000)
+        return Math.round(num / 1000) / 1000 + 'GHz';
+    return Math.round(num / 1000000) / 1000 + 'THz';
+}
+
+function Panel_Indicator() {
+    this._init.apply(this, arguments);
+}
+
+Panel_Indicator.prototype = {
+    __proto__: PanelMenu.Button.prototype,
+
+    _init: function(name, parent) {
+        PanelMenu.Button.prototype._init.call(this, 0.0)
+        this.parent = parent;
+        this.label = new St.Label({text: name});
+        this.box = new St.BoxLayout();
+        this.box.add_actor(this.label);
+        this.actor.add_actor(this.box);
+        this.add_menu_items();
+    },
+    add_menu_items: function() {
+        for (let i in this.parent.avail_freqs) {
+            let menu_item = new PopupMenu.PopupBaseMenuItem(null, {reactive: true});
+            let val_label = new St.Label({ text: num_to_freq(this.parent.avail_freqs[i]) });
+            menu_item.id = i;
+            menu_item.addActor(val_label);
+            this.menu.addMenuItem(menu_item);
+            menu_item.connect('activate', Lang.bind(this, function(item) {
+                this.parent.set_freq(item.id);
+            }));
+        }
+        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        for (let i in this.parent.avail_governors) {
+            let menu_item = new PopupMenu.PopupBaseMenuItem(null, {reactive: true});
+            let val_label = new St.Label({ text: this.parent.avail_governors[i] });
+            menu_item.id = i;
+            menu_item.addActor(val_label);
+            this.menu.addMenuItem(menu_item);
+            menu_item.connect('activate', Lang.bind(this, function(item) {
+                this.parent.set_governor(item.id);
+            }));
+        }
+    }
+};
+
 function Cpufreq_Selector() {
     this._init.apply(this, arguments);
 }
@@ -76,6 +133,7 @@ Cpufreq_Selector.prototype = {
         this.get_governors();
         this.get_cur_freq();
         this.get_cur_governor();
+        this.indicator = new Panel_Indicator(cpu, this);
     },
     get_freqs: function() {
         this.max = rd_nums_frm_file(this.cpufreq_path + '/scaling_max_freq')[0];
@@ -92,20 +150,24 @@ Cpufreq_Selector.prototype = {
         this.cur_governor = rd_frm_file(this.cpufreq_path + '/scaling_governor')[0];
     },
     set_freq: function(index) {
-        GLib.spawn_sync('.', ['cpufreq-selector', '-c', this.cpunum, '-f', this.avail_freqs[index].toString()], [], GLib.SpawnFlags.SEARCH_PATH, null);
+        res = GLib.spawn_sync(null, ['cpufreq-selector', '-c', this.cpunum.toString(), '-f', this.avail_freqs[index].toString()], null, GLib.SpawnFlags.SEARCH_PATH, null);
+        return res[0] && res[3] == 0;
     },
     set_governor: function(index) {
-        GLib.spawn_sync('.', ['cpufreq-selector', '-c', this.cpunum, '-g', this.avail_governors[index]], [], GLib.SpawnFlags.SEARCH_PATH, null);
+        res = GLib.spawn_sync(null, ['cpufreq-selector', '-c', this.cpunum.toString(), '-g', this.avail_governors[index]], null, GLib.SpawnFlags.SEARCH_PATH, null);
+        return res[0] && res[3] == 0;
     }
 };
 
 function main() {
     cpus = get_cpus();
+    let panel = Main.panel._rightBox;
+    let box = new St.BoxLayout();
+    panel.insert_actor(box, 1);
+    panel.child_set(box, { y_fill: true });
     for (let i in cpus) {
         selectors[i] = new Cpufreq_Selector(cpus[i]);
-        for (let j in selectors[i]) {
-            if (typeof(selectors[i][j]) != 'function')
-                print(selectors[i][j]);
-        }
+        box.add_actor(selectors[i].indicator.actor);
+        Main.panel._menus.addMenu(selectors[i].indicator.menu);
     }
 }
