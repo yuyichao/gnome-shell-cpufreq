@@ -150,11 +150,11 @@ Cpufreq_Selector.prototype = {
         this.cur_governor = rd_frm_file(this.cpufreq_path + '/scaling_governor')[0];
     },
     set_freq: function(index) {
-        res = GLib.spawn_sync(null, ['cpufreq-selector', '-c', this.cpunum.toString(), '-f', this.avail_freqs[index].toString()], null, GLib.SpawnFlags.SEARCH_PATH, null);
+        let res = GLib.spawn_sync(null, ['cpufreq-selector', '-c', this.cpunum.toString(), '-f', this.avail_freqs[index].toString()], null, GLib.SpawnFlags.SEARCH_PATH, null);
         return res[0] && res[3] == 0;
     },
     set_governor: function(index) {
-        res = GLib.spawn_sync(null, ['cpufreq-selector', '-c', this.cpunum.toString(), '-g', this.avail_governors[index]], null, GLib.SpawnFlags.SEARCH_PATH, null);
+        let res = GLib.spawn_sync(null, ['cpufreq-selector', '-c', this.cpunum.toString(), '-g', this.avail_governors[index]], null, GLib.SpawnFlags.SEARCH_PATH, null);
         return res[0] && res[3] == 0;
     }
 };
