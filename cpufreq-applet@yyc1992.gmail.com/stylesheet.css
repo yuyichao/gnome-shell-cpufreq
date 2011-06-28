@@ -1,0 +1,13 @@
+.cfs-label {
+    font-size: 12px;
+    padding: 0 2px 0 2px;
+}
+.cfs-panel-button {
+    padding: 0px 2px;
+    color: #bbb;
+}
+
+.cfs-panel-button:hover {
+    color: white;
+    text-shadow: black 0px 2px 2px;
+}

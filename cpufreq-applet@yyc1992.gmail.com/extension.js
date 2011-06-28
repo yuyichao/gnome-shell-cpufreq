@@ -23,6 +23,7 @@ const GLib = imports.gi.GLib;
 const Gio = imports.gi.Gio;
 const St = imports.gi.St;
 const Shell = imports.gi.Shell;
+const Signals = imports.signals;
 
 const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
@@ -88,35 +89,53 @@ Panel_Indicator.prototype = {
     __proto__: PanelMenu.Button.prototype,
 
     _init: function(name, parent) {
-        PanelMenu.Button.prototype._init.call(this, 0.0)
+        PanelMenu.Button.prototype._init.call(this, 0.0);
+        this.actor.has_tooltip = true;
+        this.actor.tooltip_text = name;
+        this.actor.remove_style_class_name('panel-button');
+        this.actor.add_style_class_name('cfs-panel-button');
         this.parent = parent;
-        this.label = new St.Label({text: name});
+        this.label = new St.Label({ text: name, style_class: 'cfs-label'});
         this.box = new St.BoxLayout();
         this.box.add_actor(this.label);
         this.actor.add_actor(this.box);
         this.add_menu_items();
+        this._onChange();
+        this.parent.connect('cur-changed', Lang.bind(this, this._onChange));
+    },
+    _onChange: function() {
+        for (let i in this.menu_items) {
+            let type = this.menu_items[i].type;
+            let id = this.menu_items[i].id;
+            this.menu_items[i].setShowDot(this.parent['avail_' + type + 's'][id] == this.parent['cur_' + type]);
+        }
     },
     add_menu_items: function() {
+        this.menu_items = [];
         for (let i in this.parent.avail_freqs) {
             let menu_item = new PopupMenu.PopupBaseMenuItem(null, {reactive: true});
             let val_label = new St.Label({ text: num_to_freq(this.parent.avail_freqs[i]) });
             menu_item.id = i;
+            menu_item.type = 'freq';
             menu_item.addActor(val_label);
             this.menu.addMenuItem(menu_item);
             menu_item.connect('activate', Lang.bind(this, function(item) {
                 this.parent.set_freq(item.id);
             }));
+            this.menu_items.push(menu_item);
         }
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         for (let i in this.parent.avail_governors) {
             let menu_item = new PopupMenu.PopupBaseMenuItem(null, {reactive: true});
             let val_label = new St.Label({ text: this.parent.avail_governors[i] });
             menu_item.id = i;
+            menu_item.type = 'governor'
             menu_item.addActor(val_label);
             this.menu.addMenuItem(menu_item);
             menu_item.connect('activate', Lang.bind(this, function(item) {
                 this.parent.set_governor(item.id);
             }));
+            this.menu_items.push(menu_item);
         }
     }
 };
@@ -151,13 +170,24 @@ Cpufreq_Selector.prototype = {
     },
     set_freq: function(index) {
         let res = GLib.spawn_sync(null, ['cpufreq-selector', '-c', this.cpunum.toString(), '-f', this.avail_freqs[index].toString()], null, GLib.SpawnFlags.SEARCH_PATH, null);
+        this.update();
         return res[0] && res[3] == 0;
     },
     set_governor: function(index) {
         let res = GLib.spawn_sync(null, ['cpufreq-selector', '-c', this.cpunum.toString(), '-g', this.avail_governors[index]], null, GLib.SpawnFlags.SEARCH_PATH, null);
+        this.update();
         return res[0] && res[3] == 0;
+    },
+    update: function() {
+        let old_freq = this.cur_freq;
+        let old_governor = this.cur_governor;
+        this.get_cur_freq();
+        this.get_cur_governor();
+        if (old_freq != this.cur_freq || old_governor != this.cur_governor)
+            this.emit('cur-changed');
     }
 };
+Signals.addSignalMethods(Cpufreq_Selector.prototype);
 
 function main() {
     cpus = get_cpus();
