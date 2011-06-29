@@ -1,7 +1,13 @@
-.cfs-label {
+.cfs-label,.cfs-panel-value {
     font-size: 12px;
+    text-align: right;
     padding: 0 2px 0 2px;
 }
+
+.cfs-panel-value {
+    min-width: 43px;
+}
+
 .cfs-panel-button {
     padding: 0px 2px;
     color: #bbb;

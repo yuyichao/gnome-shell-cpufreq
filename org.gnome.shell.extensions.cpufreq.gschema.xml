@@ -26,7 +26,7 @@
       <summary>Choose the digit type.</summary>
     </key>
     <key name="show-text" type="b">
-      <default>true</default>
+      <default>false</default>
       <summary>Display 'cpu#'</summary>
       <description>Set to true to show 'cpu#' before cpu display</description>
     </key>

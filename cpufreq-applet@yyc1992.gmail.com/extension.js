@@ -34,8 +34,7 @@ const Mainloop = imports.mainloop;
 
 const cpu_path = '/sys/devices/system/cpu/';
 const cpu_dir = Gio.file_new_for_path(cpu_path);
-let cpus = [];
-let selectors = [];
+const Schema = new Gio.Settings({ schema: 'org.gnome.shell.extensions.cpufreq' });
 
 function listdir(dir) {
     let enumerator = dir.enumerate_children(Gio.FILE_ATTRIBUTE_STANDARD_NAME, Gio.FileQueryInfoFlags.NONE, null);
@@ -71,6 +70,17 @@ function rd_nums_frm_file(file) {
     return parseInts(rd_frm_file(file));
 }
 
+function num_to_freq_panel(num) {
+    num = Math.round(num);
+    if (num < 1000)
+        return num + 'k';
+    if (num < 1000000)
+        return Math.round(num / 10) / 100 + 'M';
+    if (num < 1000000000)
+        return Math.round(num / 10000) / 100 + 'G';
+    return Math.round(num / 10000000) / 100 + 'T';
+}
+
 function num_to_freq(num) {
     num = Math.round(num);
     if (num < 1000)
@@ -97,8 +107,10 @@ Panel_Indicator.prototype = {
         this.actor.add_style_class_name('cfs-panel-button');
         this.parent = parent;
         this.label = new St.Label({ text: name, style_class: 'cfs-label'});
+        this.digit = new St.Label({ style_class: 'cfs-value-panel' });
         this.box = new St.BoxLayout();
         this.box.add_actor(this.label);
+        this.box.add_actor(this.digit);
         this.actor.add_actor(this.box);
         this.add_menu_items();
         this._onChange();
@@ -110,6 +122,7 @@ Panel_Indicator.prototype = {
             let id = this.menu_items[i].id;
             this.menu_items[i].setShowDot(this.parent['avail_' + type + 's'][id] == this.parent['cur_' + type]);
         }
+        this.digit.text = this.parent.cur_freq.toString();
     },
     add_menu_items: function() {
         this.menu_items = [];
@@ -194,15 +207,33 @@ Cpufreq_Selector.prototype = {
 };
 Signals.addSignalMethods(Cpufreq_Selector.prototype);
 
+Signals.addSignalMethods(this);
+function callback(schema, key, func) {
+    this['key'] = schema[func](key);
+    emit('key');
+}
+
+function apply_and_connect(key, func) {
+    callback(Schema, key, func);
+    Schema.connect('changed::' + key, Lang.bind(this, func));
+}
+
 function main() {
-    cpus = get_cpus();
+    this.cpus = get_cpus();
     let panel = Main.panel._rightBox;
     let box = new St.BoxLayout();
     panel.insert_actor(box, 1);
     panel.child_set(box, { y_fill: true });
+    this.selectors = [];
     for (let i in cpus) {
-        selectors[i] = new Cpufreq_Selector(cpus[i]);
+        this.selectors[i] = new Cpufreq_Selector(cpus[i]);
         box.add_actor(selectors[i].indicator.actor);
         Main.panel._menus.addMenu(selectors[i].indicator.menu);
     }
+    apply_and_connect('cpus-hidden', 'get_strv');
+    apply_and_connect('digit-type', 'get_string');
+    apply_and_connect('graph-width', 'get_int');
+    apply_and_connect('reresh-time', 'get_int');
+    apply_and_connect('show-text', 'get_boolean');
+    apply_and_connect('style', 'get_string');
 }
