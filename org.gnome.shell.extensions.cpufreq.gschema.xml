@@ -14,8 +14,12 @@
       <description>Time in ms between 2 refresh</description>
     </key>
     <key name="graph-width" type="i">
-      <default>10</default>
+      <default>6</default>
       <description>Graph width in pixel</description>
+    </key>
+    <key name="background" type="s">
+      <default>'#FFFFFF80'</default>
+      <description>Graph Background Color</description>
     </key>
     <key name="style" enum="org.gnome.shell.extensions.cpufreq.display-style">
       <default>'both'</default>

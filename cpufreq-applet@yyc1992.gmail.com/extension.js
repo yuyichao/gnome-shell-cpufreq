@@ -23,7 +23,7 @@ const GLib = imports.gi.GLib;
 const Gio = imports.gi.Gio;
 const St = imports.gi.St;
 const Shell = imports.gi.Shell;
-const Signals = imports.signals;
+const Clutter = imports.gi.Clutter;
 
 const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
@@ -32,6 +32,7 @@ const Panel = imports.ui.panel;
 
 const Lang = imports.lang;
 const Mainloop = imports.mainloop;
+const Signals = imports.signals;
 let settings = {};
 
 let start = GLib.get_monotonic_time();
@@ -41,6 +42,7 @@ const cpu_path = '/sys/devices/system/cpu/';
 const cpu_dir = Gio.file_new_for_path(cpu_path);
 const Schema = new Gio.Settings({ schema: 'org.gnome.shell.extensions.cpufreq' });
 const height = Math.round(Panel.PANEL_ICON_SIZE * 4 / 5);
+var Background = new Clutter.Color();
 
 function listdir(dir) {
     let enumerator = dir.enumerate_children(Gio.FILE_ATTRIBUTE_STANDARD_NAME, Gio.FileQueryInfoFlags.NONE, null);
@@ -98,6 +100,27 @@ function num_to_freq(num) {
     return Math.round(num / 1000000) / 1000 + 'THz';
 }
 
+function num_to_color(num, max) {
+    if (max !== undefined)
+        num = num / max;
+    if (num >= 1)
+        return '#FF0000';
+    if (num <= 0)
+        return '#00FFFF';
+    num *= 3;
+    if (num >= 2) {
+        num = Math.round((3 - num) * 255);
+        //It should be 256 and Math.floor here but I just want to make it easier
+        return '#FF%2x00'.format(num).replace(' ', '0');
+    }
+    if (num >= 1) {
+        num = Math.round((num - 1) * 255);
+        return '#%2xFF00'.format(num).replace(' ', '0');
+    }
+    num = Math.round((1 - num) * 255);
+    return '#00FF%2x'.format(num).replace(' ', '0');
+}
+
 function apply_settings(key, func) {
     func.call(this, null, settings[key]);
     connect(key, Lang.bind(this, func));
@@ -121,6 +144,7 @@ Panel_Indicator.prototype = {
         this.digit = new St.Label({ style_class: 'cfs-panel-value' });
         this.graph = new St.DrawingArea({reactive: false});
         this.graph.height = height;
+        this.graph.connect('repaint', Lang.bind(this, this._draw));
         this.box = new St.BoxLayout();
         apply_settings.call(this, 'show-text', function(sender, value) {
             this.label.visible = value;
@@ -140,6 +164,19 @@ Panel_Indicator.prototype = {
         this._onChange();
         this.parent.connect('cur-changed', Lang.bind(this, this._onChange));
     },
+    _draw: function() {
+        let [width, heigth] = this.graph.get_surface_size();
+        let cr = this.graph.get_context();
+        let value = this.parent.cur_freq / this.parent.max;
+        let color = new Clutter.Color();
+        color.from_string(num_to_color(value));
+        Clutter.cairo_set_source_color(cr, Background);
+        cr.rectangle(0, 0, width, height);
+        cr.fill();
+        Clutter.cairo_set_source_color(cr, color);
+        cr.rectangle(0, height * (1 - value), width, height);
+        cr.fill();
+    },
     _onChange: function() {
         for (let i in this.menu_items) {
             let type = this.menu_items[i].type;
@@ -147,6 +184,7 @@ Panel_Indicator.prototype = {
             this.menu_items[i].setShowDot(this.parent['avail_' + type + 's'][id] == this.parent['cur_' + type]);
         }
         this.digit.text = num_to_freq_panel(this.parent.cur_freq);
+        this.graph.queue_repaint();
     },
     add_menu_items: function() {
         this.menu_items = [];
@@ -191,6 +229,11 @@ Cpufreq_Selector.prototype = {
         this.get_cur_freq();
         this.get_cur_governor();
         this.indicator = new Panel_Indicator(cpu, this);
+        apply_settings.call(this, 'refresh-time', function(sender, value) {
+            if ('timeout' in this)
+                Mainloop.source_remove(this.timeout);
+            this.timeout = Mainloop.timeout_add(value, Lang.bind(this, this.update));
+        });
     },
 
     get_freqs: function() {
@@ -227,6 +270,7 @@ Cpufreq_Selector.prototype = {
         this.get_cur_governor();
         if (old_freq != this.cur_freq || old_governor != this.cur_governor)
             this.emit('cur-changed');
+        return true;
     }
 };
 Signals.addSignalMethods(Cpufreq_Selector.prototype);
@@ -255,6 +299,10 @@ function main() {
     connect_to_schema('refresh-time', 'get_int');
     connect_to_schema('show-text', 'get_boolean');
     connect_to_schema('style', 'get_string');
+    connect_to_schema('background', 'get_string');
+    apply_settings.call(this, 'background', function(sender, value) {
+        Background.from_string(value);
+    });
     this.selectors = [];
     for (let i in cpus) {
         this.selectors[i] = new Cpufreq_Selector(cpus[i]);
