@@ -36,6 +36,8 @@ const cpu_path = '/sys/devices/system/cpu/';
 const cpu_dir = Gio.file_new_for_path(cpu_path);
 const Schema = new Gio.Settings({ schema: 'org.gnome.shell.extensions.cpufreq' });
 
+let settings = {};
+
 function listdir(dir) {
     let enumerator = dir.enumerate_children(Gio.FILE_ATTRIBUTE_STANDARD_NAME, Gio.FileQueryInfoFlags.NONE, null);
     let children = [];
@@ -92,6 +94,11 @@ function num_to_freq(num) {
     return Math.round(num / 1000000) / 1000 + 'THz';
 }
 
+function apply_settings(key, func) {
+    connect(key, Lang.bind(this, func));
+    func.call(this, null);
+}
+
 function Panel_Indicator() {
     this._init.apply(this, arguments);
 }
@@ -107,9 +114,17 @@ Panel_Indicator.prototype = {
         this.actor.add_style_class_name('cfs-panel-button');
         this.parent = parent;
         this.label = new St.Label({ text: name, style_class: 'cfs-label'});
-        this.digit = new St.Label({ style_class: 'cfs-value-panel' });
+        this.digit = new St.Label({ style_class: 'cfs-panel-value' });
+        this.graph = new St.DrawingArea({reactive: false});
         this.box = new St.BoxLayout();
         this.box.add_actor(this.label);
+        apply_settings.call(this, 'show-text', function(sender, value) {
+            this.label.visible = value;
+        });
+        apply_settings.call(this, 'style', function(sender, value) {
+            this.digit.visible = value == 'digit' || value == 'both';
+            this.graph.visible = value == 'graph' || value == 'both';
+        });
         this.box.add_actor(this.digit);
         this.actor.add_actor(this.box);
         this.add_menu_items();
@@ -122,7 +137,7 @@ Panel_Indicator.prototype = {
             let id = this.menu_items[i].id;
             this.menu_items[i].setShowDot(this.parent['avail_' + type + 's'][id] == this.parent['cur_' + type]);
         }
-        this.digit.text = this.parent.cur_freq.toString();
+        this.digit.text = num_to_freq_panel(this.parent.cur_freq);
     },
     add_menu_items: function() {
         this.menu_items = [];
@@ -209,13 +224,13 @@ Signals.addSignalMethods(Cpufreq_Selector.prototype);
 
 Signals.addSignalMethods(this);
 function callback(schema, key, func) {
-    this['key'] = schema[func](key);
-    emit('key');
+    settings[key] = schema[func](key);
+    emit(key, settings[key]);
 }
 
 function apply_and_connect(key, func) {
     callback(Schema, key, func);
-    Schema.connect('changed::' + key, Lang.bind(this, func));
+    Schema.connect('changed::' + key, Lang.bind(this, callback, func));
 }
 
 function main() {
@@ -233,7 +248,7 @@ function main() {
     apply_and_connect('cpus-hidden', 'get_strv');
     apply_and_connect('digit-type', 'get_string');
     apply_and_connect('graph-width', 'get_int');
-    apply_and_connect('reresh-time', 'get_int');
+    apply_and_connect('refresh-time', 'get_int');
     apply_and_connect('show-text', 'get_boolean');
     apply_and_connect('style', 'get_string');
 }
