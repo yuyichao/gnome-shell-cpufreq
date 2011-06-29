@@ -25,6 +25,12 @@ done
 name="cpufreq"
 uuid="cpufreq@yyc1992.gmail.com"
 
+if type lsb_release &> /dev/null && [[ $(lsb_release -i) =~ Ubuntu ]]; then
+    usr_dir="usr/local"
+else
+    usr_dir="usr"
+fi
+
 mkdir -p "${prefix}/${usr_dir}/share/gnome-shell/extensions"
 cp -vr "${srcdir}/${uuid}" "${prefix}/${usr_dir}/share/gnome-shell/extensions/"
 mkdir -p "${prefix}/${usr_dir}/bin"
