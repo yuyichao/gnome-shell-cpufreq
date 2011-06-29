@@ -23,7 +23,7 @@ for ((i = 1;i <= $#;i++)) ;do
 done
 
 name="cpufreq"
-uuid="cpufreq@yyc1992.gmail.com"
+uuid="cpufreq-applet@yyc1992.gmail.com"
 
 if type lsb_release &> /dev/null && [[ $(lsb_release -i) =~ Ubuntu ]]; then
     usr_dir="usr/local"
