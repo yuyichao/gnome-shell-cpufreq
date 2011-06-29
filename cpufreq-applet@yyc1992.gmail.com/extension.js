@@ -30,6 +30,7 @@ const PopupMenu = imports.ui.popupMenu;
 const Main = imports.ui.main;
 
 const Lang = imports.lang;
+const Mainloop = imports.mainloop;
 
 const cpu_path = '/sys/devices/system/cpu/';
 const cpu_dir = Gio.file_new_for_path(cpu_path);
@@ -154,6 +155,7 @@ Cpufreq_Selector.prototype = {
         this.get_cur_governor();
         this.indicator = new Panel_Indicator(cpu, this);
     },
+
     get_freqs: function() {
         this.max = rd_nums_frm_file(this.cpufreq_path + '/scaling_max_freq')[0];
         this.min = rd_nums_frm_file(this.cpufreq_path + '/scaling_min_freq')[0];
@@ -162,12 +164,14 @@ Cpufreq_Selector.prototype = {
     get_governors: function() {
         this.avail_governors = rd_frm_file(this.cpufreq_path + '/scaling_available_governors');
     },
+
     get_cur_freq: function() {
         this.cur_freq = rd_nums_frm_file(this.cpufreq_path + '/scaling_cur_freq')[0];
     },
     get_cur_governor: function() {
         this.cur_governor = rd_frm_file(this.cpufreq_path + '/scaling_governor')[0];
     },
+
     set_freq: function(index) {
         let res = GLib.spawn_sync(null, ['cpufreq-selector', '-c', this.cpunum.toString(), '-f', this.avail_freqs[index].toString()], null, GLib.SpawnFlags.SEARCH_PATH, null);
         this.update();
@@ -178,6 +182,7 @@ Cpufreq_Selector.prototype = {
         this.update();
         return res[0] && res[3] == 0;
     },
+
     update: function() {
         let old_freq = this.cur_freq;
         let old_governor = this.cur_governor;
