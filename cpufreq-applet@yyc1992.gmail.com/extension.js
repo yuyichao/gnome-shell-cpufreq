@@ -144,8 +144,11 @@ Panel_Indicator.prototype = {
         this.digit = new St.Label({ style_class: 'cfs-panel-value' });
         this.graph = new St.DrawingArea({reactive: false});
         this.graph.height = height;
-        this.graph.connect('repaint', Lang.bind(this, this._draw));
         this.box = new St.BoxLayout();
+        this.graph.connect('repaint', Lang.bind(this, this._draw));
+        this.box.connect('show', Lang.bind(this.graph, function() {
+            this.queue_repaint();
+        }));
         apply_settings.call(this, 'show-text', function(sender, value) {
             this.label.visible = value;
         });
@@ -165,6 +168,7 @@ Panel_Indicator.prototype = {
         this.parent.connect('cur-changed', Lang.bind(this, this._onChange));
     },
     _draw: function() {
+        if ((this.graph.visible || this.box.visible) == false) return;
         let [width, heigth] = this.graph.get_surface_size();
         let cr = this.graph.get_context();
         let value = this.parent.cur_freq / this.parent.max;
