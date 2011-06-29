@@ -28,15 +28,19 @@ const Signals = imports.signals;
 const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
 const Main = imports.ui.main;
+const Panel = imports.ui.panel;
 
 const Lang = imports.lang;
 const Mainloop = imports.mainloop;
+let settings = {};
+
+let start = GLib.get_monotonic_time();
+global.log('cpufreq: start @ ' + start);
 
 const cpu_path = '/sys/devices/system/cpu/';
 const cpu_dir = Gio.file_new_for_path(cpu_path);
 const Schema = new Gio.Settings({ schema: 'org.gnome.shell.extensions.cpufreq' });
-
-let settings = {};
+const height = Math.round(Panel.PANEL_ICON_SIZE * 4 / 5);
 
 function listdir(dir) {
     let enumerator = dir.enumerate_children(Gio.FILE_ATTRIBUTE_STANDARD_NAME, Gio.FileQueryInfoFlags.NONE, null);
@@ -95,8 +99,8 @@ function num_to_freq(num) {
 }
 
 function apply_settings(key, func) {
+    func.call(this, null, settings[key]);
     connect(key, Lang.bind(this, func));
-    func.call(this, null);
 }
 
 function Panel_Indicator() {
@@ -116,8 +120,8 @@ Panel_Indicator.prototype = {
         this.label = new St.Label({ text: name, style_class: 'cfs-label'});
         this.digit = new St.Label({ style_class: 'cfs-panel-value' });
         this.graph = new St.DrawingArea({reactive: false});
+        this.graph.height = height;
         this.box = new St.BoxLayout();
-        this.box.add_actor(this.label);
         apply_settings.call(this, 'show-text', function(sender, value) {
             this.label.visible = value;
         });
@@ -125,6 +129,11 @@ Panel_Indicator.prototype = {
             this.digit.visible = value == 'digit' || value == 'both';
             this.graph.visible = value == 'graph' || value == 'both';
         });
+        apply_settings.call(this, 'graph-width', function(sender, value) {
+            this.graph.width = value;
+        });
+        this.box.add_actor(this.label);
+        this.box.add_actor(this.graph);
         this.box.add_actor(this.digit);
         this.actor.add_actor(this.box);
         this.add_menu_items();
@@ -223,14 +232,15 @@ Cpufreq_Selector.prototype = {
 Signals.addSignalMethods(Cpufreq_Selector.prototype);
 
 Signals.addSignalMethods(this);
-function callback(schema, key, func) {
+
+function reemit(schema, key, func) {
     settings[key] = schema[func](key);
     emit(key, settings[key]);
 }
 
-function apply_and_connect(key, func) {
-    callback(Schema, key, func);
-    Schema.connect('changed::' + key, Lang.bind(this, callback, func));
+function connect_to_schema(key, func) {
+    reemit(Schema, key, func);
+    Schema.connect('changed::' + key, Lang.bind(this, reemit, func));
 }
 
 function main() {
@@ -239,16 +249,32 @@ function main() {
     let box = new St.BoxLayout();
     panel.insert_actor(box, 1);
     panel.child_set(box, { y_fill: true });
+    connect_to_schema('cpus-hidden', 'get_strv');
+    connect_to_schema('digit-type', 'get_string');
+    connect_to_schema('graph-width', 'get_int');
+    connect_to_schema('refresh-time', 'get_int');
+    connect_to_schema('show-text', 'get_boolean');
+    connect_to_schema('style', 'get_string');
     this.selectors = [];
     for (let i in cpus) {
         this.selectors[i] = new Cpufreq_Selector(cpus[i]);
         box.add_actor(selectors[i].indicator.actor);
         Main.panel._menus.addMenu(selectors[i].indicator.menu);
     }
-    apply_and_connect('cpus-hidden', 'get_strv');
-    apply_and_connect('digit-type', 'get_string');
-    apply_and_connect('graph-width', 'get_int');
-    apply_and_connect('refresh-time', 'get_int');
-    apply_and_connect('show-text', 'get_boolean');
-    apply_and_connect('style', 'get_string');
+    apply_settings.call(this, 'cpus-hidden', function(sender, value) {
+        let visible = [];
+        for (let i in this.selectors)
+            visible[i] = true;
+        for (let i in value) {
+            value[i] = value[i].replace(/^cpu/, '');
+            if (value[i] in visible)
+                visible[value[i]] = false;
+        }
+        for (let i in this.selectors)
+            this.selectors[i].indicator.actor.visible = visible[i];
+    });
+    let finish = GLib.get_monotonic_time();
+    global.log('cpufreq: finish @ ' + finish);
+    global.log('cpufreq: use ' + (finish - start));
+    log('cpufreq: use ' + (finish - start));
 }
