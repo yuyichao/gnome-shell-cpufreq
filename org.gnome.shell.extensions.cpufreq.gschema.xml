@@ -8,7 +8,7 @@
     <value value="0" nick="frequency"/>
     <value value="1" nick="percentage"/>
   </enum>
-  <schema id="org.gnome.shell.extensions.system-monitor" path="/org/gnome/shell/extensions/cpufreq/">
+  <schema id="org.gnome.shell.extensions.cpufreq" path="/org/gnome/shell/extensions/cpufreq/">
     <key name="refresh-time" type="i">
       <default>2000</default>
       <description>Time in ms between 2 refresh</description>
