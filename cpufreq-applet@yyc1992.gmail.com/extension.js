@@ -50,21 +50,19 @@ const Schema = new Gio.Settings({ schema: 'org.gnome.shell.extensions.cpufreq' }
 const height = Math.round(Panel.PANEL_ICON_SIZE * 4 / 5);
 var Background = new Clutter.Color();
 
+//basic functions
 function parseInts(strs) {
     let rec = [];
     for (let i in strs)
         rec.push(parseInt(strs[i]));
     return rec;
 }
-
 function rd_frm_file(file) {
     return Shell.get_file_contents_utf8_sync(file).replace(/\n/g, '').replace(/ +/g, ' ').replace(/ +$/g, '').split(' ');
 }
-
 function rd_nums_frm_file(file) {
     return parseInts(rd_frm_file(file));
 }
-
 function num_to_freq_panel(num) {
     num = Math.round(num);
     if (num < 1000)
@@ -75,7 +73,6 @@ function num_to_freq_panel(num) {
         return Math.round(num / 10000) / 100 + 'G';
     return Math.round(num / 10000000) / 100 + 'T';
 }
-
 function num_to_freq(num) {
     num = Math.round(num);
     if (num < 1000)
@@ -86,7 +83,9 @@ function num_to_freq(num) {
         return Math.round(num / 1000) / 1000 + 'GHz';
     return Math.round(num / 1000000) / 1000 + 'THz';
 }
-
+function percent_to_hex(num) {
+    return Math.min(Math.floor(num * 256), 255);
+}
 function num_to_color(num, max) {
     if (max !== undefined)
         num = num / max;
@@ -95,19 +94,22 @@ function num_to_color(num, max) {
     if (num <= 0)
         return '#00FFFF';
     num *= 3;
-    if (num >= 2) {
-        num = Math.round((3 - num) * 255);
-        //It should be 256 and Math.floor here but I just want to make it easier
-        return '#FF%2x00'.format(num).replace(' ', '0');
-    }
-    if (num >= 1) {
-        num = Math.round((num - 1) * 255);
-        return '#%2xFF00'.format(num).replace(' ', '0');
-    }
-    num = Math.round((1 - num) * 255);
-    return '#00FF%2x'.format(num).replace(' ', '0');
+    if (num >= 2)
+        return '#FF%2x00'.format(3 - num).replace(' ', '0');
+    if (num >= 1)
+        return '#%2xFF00'.format(num - 1).replace(' ', '0');
+    return '#00FF%2x'.format(1 - num).replace(' ', '0');
 }
 
+//signal functions
+function reemit(schema, key, func) {
+    settings[key] = schema[func](key);
+    emit(key, settings[key]);
+}
+function connect_to_schema(key, func) {
+    reemit(Schema, key, func);
+    Schema.connect('changed::' + key, Lang.bind(this, reemit, func));
+}
 function apply_settings(key, func) {
     func.call(this, null, settings[key]);
     connect(key, Lang.bind(this, func));
@@ -116,7 +118,6 @@ function apply_settings(key, func) {
 function Panel_Indicator() {
     this._init.apply(this, arguments);
 }
-
 Panel_Indicator.prototype = {
     __proto__: PanelMenu.Button.prototype,
 
@@ -210,7 +211,6 @@ Panel_Indicator.prototype = {
 function Cpufreq_Selector() {
     this._init.apply(this, arguments);
 }
-
 Cpufreq_Selector.prototype = {
     _init: function(cpu) {
         this.cpunum = cpu.replace(/cpu/, '');
@@ -264,16 +264,6 @@ Signals.addSignalMethods(Cpufreq_Selector.prototype);
 
 Signals.addSignalMethods(this);
 
-function reemit(schema, key, func) {
-    settings[key] = schema[func](key);
-    emit(key, settings[key]);
-}
-
-function connect_to_schema(key, func) {
-    reemit(Schema, key, func);
-    Schema.connect('changed::' + key, Lang.bind(this, reemit, func));
-}
-
 function add_cpus_frm_files(cpu_child) {
     let pattern = /^cpu[0-9]+/
     for (let i in cpu_child)
@@ -297,7 +287,6 @@ function add_cpus_frm_files(cpu_child) {
             selectors[i].indicator.actor.visible = visible[i];
     });
 }
-
 function main() {
     let panel = Main.panel._rightBox;
     box = new St.BoxLayout();
