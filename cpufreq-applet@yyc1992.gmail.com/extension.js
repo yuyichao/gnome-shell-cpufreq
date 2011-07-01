@@ -30,38 +30,25 @@ const PopupMenu = imports.ui.popupMenu;
 const Main = imports.ui.main;
 const Panel = imports.ui.panel;
 
+const Util = imports.misc.util;
+const FileUtils = imports.misc.fileUtils;
+
 const Lang = imports.lang;
 const Mainloop = imports.mainloop;
 const Signals = imports.signals;
-let settings = {};
 
 let start = GLib.get_monotonic_time();
 global.log('cpufreq: start @ ' + start);
+let settings = {};
+let cpus = [];
+let selectors = [];
+let box;
 
 const cpu_path = '/sys/devices/system/cpu/';
 const cpu_dir = Gio.file_new_for_path(cpu_path);
 const Schema = new Gio.Settings({ schema: 'org.gnome.shell.extensions.cpufreq' });
 const height = Math.round(Panel.PANEL_ICON_SIZE * 4 / 5);
 var Background = new Clutter.Color();
-
-function listdir(dir) {
-    let enumerator = dir.enumerate_children(Gio.FILE_ATTRIBUTE_STANDARD_NAME, Gio.FileQueryInfoFlags.NONE, null);
-    let children = [];
-    let child;
-    while ((child = enumerator.next_file(null)))
-        children.push(child.get_name());
-    return children;
-}
-
-function get_cpus() {
-    let cpu_child = listdir(cpu_dir);
-    let cpus = [];
-    let pattern = /^cpu[0-9]+/
-    for (let i in cpu_child)
-        if (pattern.test(cpu_child[i]))
-            cpus.push(cpu_child[i]);
-    return cpus;
-}
 
 function parseInts(strs) {
     let rec = [];
@@ -257,14 +244,10 @@ Cpufreq_Selector.prototype = {
     },
 
     set_freq: function(index) {
-        let res = GLib.spawn_sync(null, ['cpufreq-selector', '-c', this.cpunum.toString(), '-f', this.avail_freqs[index].toString()], null, GLib.SpawnFlags.SEARCH_PATH, null);
-        this.update();
-        return res[0] && res[3] == 0;
+        Util.spawn(['cpufreq-selector', '-c', this.cpunum.toString(), '-f', this.avail_freqs[index].toString()]);
     },
     set_governor: function(index) {
-        let res = GLib.spawn_sync(null, ['cpufreq-selector', '-c', this.cpunum.toString(), '-g', this.avail_governors[index]], null, GLib.SpawnFlags.SEARCH_PATH, null);
-        this.update();
-        return res[0] && res[3] == 0;
+        Util.spawn(['cpufreq-selector', '-c', this.cpunum.toString(), '-g', this.avail_governors[index]]);
     },
 
     update: function() {
@@ -291,10 +274,33 @@ function connect_to_schema(key, func) {
     Schema.connect('changed::' + key, Lang.bind(this, reemit, func));
 }
 
+function add_cpus_frm_files(cpu_child) {
+    let pattern = /^cpu[0-9]+/
+    for (let i in cpu_child)
+        if (pattern.test(cpu_child[i].get_name()))
+            cpus.push(cpu_child[i].get_name());
+    for (let i = cpus.length - 1;i >= 0;i--) {
+        selectors[i] = new Cpufreq_Selector(cpus[i]);
+        box.add_actor(selectors[i].indicator.actor);
+        Main.panel._menus.addMenu(selectors[i].indicator.menu);
+    }
+    apply_settings.call(this, 'cpus-hidden', function(sender, value) {
+        let visible = [];
+        for (let i in selectors)
+            visible[i] = true;
+        for (let i in value) {
+            value[i] = value[i].replace(/^cpu/, '');
+            if (value[i] in visible)
+                visible[value[i]] = false;
+        }
+        for (let i in selectors)
+            selectors[i].indicator.actor.visible = visible[i];
+    });
+}
+
 function main() {
-    this.cpus = get_cpus();
     let panel = Main.panel._rightBox;
-    let box = new St.BoxLayout();
+    box = new St.BoxLayout();
     panel.insert_actor(box, 1);
     panel.child_set(box, { y_fill: true });
     connect_to_schema('cpus-hidden', 'get_strv');
@@ -307,24 +313,7 @@ function main() {
     apply_settings.call(this, 'background', function(sender, value) {
         Background.from_string(value);
     });
-    this.selectors = [];
-    for (let i in cpus) {
-        this.selectors[i] = new Cpufreq_Selector(cpus[i]);
-        box.add_actor(selectors[i].indicator.actor);
-        Main.panel._menus.addMenu(selectors[i].indicator.menu);
-    }
-    apply_settings.call(this, 'cpus-hidden', function(sender, value) {
-        let visible = [];
-        for (let i in this.selectors)
-            visible[i] = true;
-        for (let i in value) {
-            value[i] = value[i].replace(/^cpu/, '');
-            if (value[i] in visible)
-                visible[value[i]] = false;
-        }
-        for (let i in this.selectors)
-            this.selectors[i].indicator.actor.visible = visible[i];
-    });
+    FileUtils.listDirAsync(cpu_dir, Lang.bind(this, add_cpus_frm_files));
     let finish = GLib.get_monotonic_time();
     global.log('cpufreq: finish @ ' + finish);
     global.log('cpufreq: use ' + (finish - start));
