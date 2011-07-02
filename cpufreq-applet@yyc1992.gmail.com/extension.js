@@ -43,6 +43,7 @@ let settings = {};
 let cpus = [];
 let selectors = [];
 let box;
+let summary;
 
 const cpu_path = '/sys/devices/system/cpu/';
 const cpu_dir = Gio.file_new_for_path(cpu_path);
@@ -196,7 +197,8 @@ Panel_Indicator.prototype = {
             this.menu.addMenuItem(menu_item);
             this.menu_items.push(menu_item);
         }
-        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        this.parent.avail_freqs.length && this.parent.avail_governors.length &&
+            this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         for (let i in this.parent.avail_governors) {
             let menu_item = new PopupMenu.PopupBaseMenuItem(null, {reactive: true});
             let val_label = new St.Label({ text: this.parent.avail_governors[i] });
@@ -260,6 +262,51 @@ CpufreqSelectorBase.prototype = {
 };
 Signals.addSignalMethods(CpufreqSelectorBase.prototype);
 
+function CpufreqSelector() {
+    this._init.apply(this, arguments);
+}
+CpufreqSelector.prototype = {
+    __proto__: CpufreqSelectorBase.prototype,
+
+    get_avail: function() {
+        this.max = 0;
+        this.min = 0;
+        let freqs = {};
+        let governors = {};
+        for (let i in selectors) {
+            let selector = selectors[i];
+            this.max += selector.max;
+            this.min += selector.min;
+            for (let j in selector.avail_freqs)
+                freqs[selector.avail_freqs[j]] = 1;
+            for (let j in selector.avail_governors)
+                governors[selector.avail_governors[j]] = 1;
+        }
+        this.max /= selectors.length;
+        this.min /= selectors.length;
+        this.avail_freqs = [];
+        this.avail_governors = [];
+        for (let freq in freqs)
+            this.avail_freqs.push(freq);
+        for (let governor in governors)
+            this.avail_governors.push(governor);
+    },
+
+    get_cur: function() {
+        this.cur_freq = 0;
+        for (let i in selectors)
+            this.cur_freq += selectors[i].cur_freq;
+        this.cur_freq /= selectors.length;
+        this.cur_governor = '';
+    },
+
+    set: function(type, index) {
+        for (let i in selectors)
+            selectors[i].set(type, index);
+    },
+};
+
+
 Signals.addSignalMethods(this);
 
 function add_cpus_frm_files(cpu_child) {
@@ -267,15 +314,19 @@ function add_cpus_frm_files(cpu_child) {
     for (let i in cpu_child)
         if (pattern.test(cpu_child[i].get_name()))
             cpus.push(cpu_child[i].get_name());
-    for (let i = cpus.length - 1;i >= 0;i--) {
+    for (let i in cpus) {
         selectors[i] = new CpufreqSelectorBase(cpus[i]);
         box.add_actor(selectors[i].indicator.actor);
         Main.panel._menus.addMenu(selectors[i].indicator.menu);
     }
+    summary = new CpufreqSelector('');
+    box.add_actor(summary.indicator.actor);
+    Main.panel._menus.addMenu(summary.indicator.menu);
     apply_settings.call(this, 'cpus-hidden', function(sender, value) {
         let visible = [];
         for (let i in selectors)
             visible[i] = true;
+        visible[-1] = true;
         for (let i in value) {
             value[i] = value[i].replace(/^cpu/, '');
             if (value[i] in visible)
@@ -283,11 +334,12 @@ function add_cpus_frm_files(cpu_child) {
         }
         for (let i in selectors)
             selectors[i].indicator.actor.visible = visible[i];
+        summary.indicator.actor.visible = visible[-1];
     });
 }
 function main() {
     let panel = Main.panel._rightBox;
-    box = new St.BoxLayout();
+    box = new St.BoxLayout({ pack_start: true });
     panel.insert_actor(box, 1);
     panel.child_set(box, { y_fill: true });
     connect_to_schema('cpus-hidden', 'get_strv');
