@@ -156,9 +156,9 @@ Panel_Indicator.prototype = {
         this.add_menu_items();
         apply_settings.call(this, 'digit-type', function(sender, value) {
             this.set_digit = value == 'frequency' ? function () {
-                this.digit.text = num_to_freq_panel(this.parent.cur_freq);
+                this.digit.text = num_to_freq_panel(this.parent.avg_freq);
             } : function () {
-                this.digit.text = Math.round(this.parent.cur_freq / this.parent.max * 100) + ' %';
+                this.digit.text = Math.round(this.parent.avg_freq / this.parent.max * 100) + ' %';
             };
             this._onChange();
         });
@@ -168,7 +168,7 @@ Panel_Indicator.prototype = {
         if ((this.graph.visible || this.box.visible) == false) return;
         let [width, heigth] = this.graph.get_surface_size();
         let cr = this.graph.get_context();
-        let value = this.parent.cur_freq / this.parent.max;
+        let value = this.parent.avg_freq / this.parent.max;
         this.color.from_string(num_to_color(value));
         Clutter.cairo_set_source_color(cr, Background);
         cr.rectangle(0, 0, width, height);
@@ -181,7 +181,7 @@ Panel_Indicator.prototype = {
         for (let i in this.menu_items) {
             let type = this.menu_items[i].type;
             let id = this.menu_items[i].id;
-            this.menu_items[i].setShowDot(this.parent['avail_' + type + 's'][id] == this.parent['cur_' + type]);
+            this.menu_items[i].setShowDot(this.parent['cur_' + type].indexOf(this.parent['avail_' + type + 's'][id]) >= 0);
         }
         this.set_digit();
         this.graph.queue_repaint();
@@ -243,8 +243,9 @@ CpufreqSelectorBase.prototype = {
     },
 
     get_cur: function() {
-        this.cur_freq = rd_nums_frm_file(this.cpufreq_path + '/scaling_cur_freq')[0];
-        this.cur_governor = rd_frm_file(this.cpufreq_path + '/scaling_governor')[0];
+        this.cur_freq = rd_nums_frm_file(this.cpufreq_path + '/scaling_cur_freq');
+        this.avg_freq = this.cur_freq[0];
+        this.cur_governor = rd_frm_file(this.cpufreq_path + '/scaling_governor');
     },
 
     set: function(type, index) {
@@ -293,11 +294,23 @@ CpufreqSelector.prototype = {
     },
 
     get_cur: function() {
-        this.cur_freq = 0;
-        for (let i in selectors)
-            this.cur_freq += selectors[i].cur_freq;
-        this.cur_freq /= selectors.length;
-        this.cur_governor = '';
+        this.avg_freq = 0;
+        this.cur_freq = [];
+        this.cur_governor = [];
+        let freqs = {};
+        let governors = {};
+        for (let i in selectors) {
+            let selector = selectors[i];
+            this.avg_freq += selector.avg_freq;
+            freqs[selector.avg_freq] = 1;
+            for (let j in selector.cur_governor)
+                governors[selector.cur_governor[j]] = 1;
+        }
+        this.avg_freq /= selectors.length;
+        for (let freq in freqs)
+            this.cur_freq.push(freq);
+        for (let governor in governors)
+            this.cur_governor.push(governor);
     },
 
     set: function(type, index) {
