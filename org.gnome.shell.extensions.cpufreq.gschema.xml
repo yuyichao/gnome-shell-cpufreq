@@ -37,7 +37,7 @@
     <key name="cpus-hidden" type="as">
       <default>[]</default>
       <summary>Cpus Hidden</summary>
-      <description>Names of cpus not shown</description>
+      <description>Names of cpus not shown, add "-1" to hide the summary one.</description>
     </key>
   </schema>
 </schemalist>
