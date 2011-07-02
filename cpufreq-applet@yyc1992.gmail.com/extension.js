@@ -319,7 +319,7 @@ function add_cpus_frm_files(cpu_child) {
         box.add_actor(selectors[i].indicator.actor);
         Main.panel._menus.addMenu(selectors[i].indicator.menu);
     }
-    summary = new CpufreqSelector('');
+    summary = new CpufreqSelector('cpu');
     box.add_actor(summary.indicator.actor);
     Main.panel._menus.addMenu(summary.indicator.menu);
     apply_settings.call(this, 'cpus-hidden', function(sender, value) {
