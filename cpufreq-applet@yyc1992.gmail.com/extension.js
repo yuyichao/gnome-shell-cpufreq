@@ -350,6 +350,15 @@ function add_cpus_frm_files(cpu_child) {
         summary.indicator.actor.visible = visible[-1];
     });
 }
+
+function enable() {
+    main();
+}
+
+function disable() {
+    //nothing
+}
+
 function main() {
     let panel = Main.panel._rightBox;
     box = new St.BoxLayout({ pack_start: true });
@@ -371,3 +380,8 @@ function main() {
     global.log('cpufreq: use ' + (finish - start));
     log('cpufreq: use ' + (finish - start));
 }
+
+function init() {
+    /* doing nothing */
+}
+
