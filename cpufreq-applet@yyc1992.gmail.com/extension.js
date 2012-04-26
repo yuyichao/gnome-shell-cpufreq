@@ -128,7 +128,7 @@ Panel_Indicator.prototype = {
         this.actor.tooltip_text = name;
         this.actor.remove_style_class_name('panel-button');
         this.actor.add_style_class_name('cfs-panel-button');
-        this.parent = parent;
+        this._parent = parent;
         this.color = new Clutter.Color();
         this.label = new St.Label({ text: name, style_class: 'cfs-label'});
         this.digit = new St.Label({ style_class: 'cfs-panel-value' });
@@ -156,19 +156,19 @@ Panel_Indicator.prototype = {
         this.add_menu_items();
         apply_settings.call(this, 'digit-type', function(sender, value) {
             this.set_digit = value == 'frequency' ? function () {
-                this.digit.text = num_to_freq_panel(this.parent.avg_freq);
+                this.digit.text = num_to_freq_panel(this._parent.avg_freq);
             } : function () {
-                this.digit.text = Math.round(this.parent.avg_freq / this.parent.max * 100) + ' %';
+                this.digit.text = Math.round(this._parent.avg_freq / this._parent.max * 100) + ' %';
             };
             this._onChange();
         });
-        this.parent.connect('cur-changed', Lang.bind(this, this._onChange));
+        this._parent.connect('cur-changed', Lang.bind(this, this._onChange));
     },
     _draw: function() {
         if ((this.graph.visible || this.box.visible) == false) return;
         let [width, heigth] = this.graph.get_surface_size();
         let cr = this.graph.get_context();
-        let value = this.parent.avg_freq / this.parent.max;
+        let value = this._parent.avg_freq / this._parent.max;
         this.color.from_string(num_to_color(value));
         Clutter.cairo_set_source_color(cr, Background);
         cr.rectangle(0, 0, width, height);
@@ -181,27 +181,27 @@ Panel_Indicator.prototype = {
         for (let i in this.menu_items) {
             let type = this.menu_items[i].type;
             let id = this.menu_items[i].id;
-            this.menu_items[i].setShowDot(this.parent['cur_' + type].indexOf(this.parent['avail_' + type + 's'][id]) >= 0);
+            this.menu_items[i].setShowDot(this._parent['cur_' + type].indexOf(this._parent['avail_' + type + 's'][id]) >= 0);
         }
         this.set_digit();
         this.graph.queue_repaint();
     },
     add_menu_items: function() {
         this.menu_items = [];
-        for (let i in this.parent.avail_freqs) {
+        for (let i in this._parent.avail_freqs) {
             let menu_item = new PopupMenu.PopupBaseMenuItem(null, {reactive: true});
-            let val_label = new St.Label({ text: num_to_freq(this.parent.avail_freqs[i]) });
+            let val_label = new St.Label({ text: num_to_freq(this._parent.avail_freqs[i]) });
             menu_item.id = i;
             menu_item.type = 'freq';
             menu_item.addActor(val_label);
             this.menu.addMenuItem(menu_item);
             this.menu_items.push(menu_item);
         }
-        this.parent.avail_freqs.length && this.parent.avail_governors.length &&
+        this._parent.avail_freqs.length && this._parent.avail_governors.length &&
             this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        for (let i in this.parent.avail_governors) {
+        for (let i in this._parent.avail_governors) {
             let menu_item = new PopupMenu.PopupBaseMenuItem(null, {reactive: true});
-            let val_label = new St.Label({ text: this.parent.avail_governors[i] });
+            let val_label = new St.Label({ text: this._parent.avail_governors[i] });
             menu_item.id = i;
             menu_item.type = 'governor'
             menu_item.addActor(val_label);
@@ -210,7 +210,7 @@ Panel_Indicator.prototype = {
         }
         for (let i in this.menu_items) {
             this.menu_items[i].connect('activate', Lang.bind(this, function(item) {
-                this.parent.set(item.type ,item.id);
+                this._parent.set(item.type ,item.id);
             }));
         }
 
@@ -362,7 +362,7 @@ function disable() {
 function main() {
     let panel = Main.panel._rightBox;
     box = new St.BoxLayout({ pack_start: true });
-    panel.insert_actor(box, 1);
+    panel.insert_child_at_index(box, 1);
     panel.child_set(box, { y_fill: true });
     connect_to_schema('cpus-hidden', 'get_strv');
     connect_to_schema('digit-type', 'get_string');
@@ -384,4 +384,3 @@ function main() {
 function init() {
     /* doing nothing */
 }
-
