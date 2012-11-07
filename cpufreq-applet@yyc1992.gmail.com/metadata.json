@@ -1,5 +1,5 @@
 {
-    "shell-version": ["3.2", "3.4"],
+    "shell-version": ["3.6"],
     "uuid": "cpufreq-applet@yyc1992.gmail.com",
     "name": "cpufreq-applet",
     "url": "https://github.com/yuyichao/gnome-shell-cpufreq-applet",

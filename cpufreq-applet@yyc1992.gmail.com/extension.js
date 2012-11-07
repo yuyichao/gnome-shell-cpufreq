@@ -38,7 +38,6 @@ const Mainloop = imports.mainloop;
 const Signals = imports.signals;
 
 let start = GLib.get_monotonic_time();
-global.log('cpufreq: start @ ' + start);
 let settings = {};
 let cpus = [];
 let selectors = [];
@@ -84,22 +83,28 @@ function num_to_freq(num) {
         return Math.round(num / 1000) / 1000 + 'GHz';
     return Math.round(num / 1000000) / 1000 + 'THz';
 }
-function percent_to_hex(str, num) {
-    return str.format(Math.min(Math.floor(num * 256), 255)).replace(' ', '0');
-}
-function num_to_color(num, max) {
+
+function cf_num_to_set_src_color(cr, num, max) {
     if (max !== undefined)
         num = num / max;
-    if (num >= 1)
-        return '#FF0000';
-    if (num <= 0)
-        return '#00FFFF';
+    if (num >= 1) {
+        cr.setSourceRGBA(1, 0, 0, 1);
+        return;
+    }
+    if (num <= 0) {
+        cr.setSourceRGBA(0, 1, 1, 1);
+        return;
+    }
     num *= 3;
-    if (num >= 2)
-        return percent_to_hex('#FF%2x00', 3 - num);
-    if (num >= 1)
-        return percent_to_hex('#%2xFF00', num - 1);
-    return percent_to_hex('#00FF%2x', 1 - num);
+    if (num >= 2) {
+        cr.setSourceRGBA(1, 3 - num, 0, 1);
+        return;
+    }
+    if (num >= 1) {
+        cr.setSourceRGBA(num - 1, 1, 0, 1);
+        return;
+    }
+    cr.setSourceRGBA(0, 1, 1 - num, 1);
 }
 
 //signal functions
@@ -129,10 +134,11 @@ Panel_Indicator.prototype = {
         this.actor.remove_style_class_name('panel-button');
         this.actor.add_style_class_name('cfs-panel-button');
         this._parent = parent;
-        this.color = new Clutter.Color();
         this.label = new St.Label({ text: name, style_class: 'cfs-label'});
         this.digit = new St.Label({ style_class: 'cfs-panel-value' });
-        this.graph = new St.DrawingArea({reactive: false});
+        this.graph = new St.DrawingArea({
+            reactive: false
+        });
         this.graph.height = height;
         this.box = new St.BoxLayout();
         this.graph.connect('repaint', Lang.bind(this, this._draw));
@@ -165,15 +171,16 @@ Panel_Indicator.prototype = {
         this._parent.connect('cur-changed', Lang.bind(this, this._onChange));
     },
     _draw: function() {
-        if ((this.graph.visible || this.box.visible) == false) return;
+        if ((this.graph.visible || this.box.visible) == false)
+            return;
         let [width, heigth] = this.graph.get_surface_size();
         let cr = this.graph.get_context();
         let value = this._parent.avg_freq / this._parent.max;
-        this.color.from_string(num_to_color(value));
-        Clutter.cairo_set_source_color(cr, Background);
+        cr.setSourceRGBA(Background.red / 255, Background.green / 255,
+                         Background.blue / 255, Background.alpha / 255);
         cr.rectangle(0, 0, width, height);
         cr.fill();
-        Clutter.cairo_set_source_color(cr, this.color);
+        cf_num_to_set_src_color(cr, value);
         cr.rectangle(0, height * (1 - value), width, height);
         cr.fill();
     },
@@ -329,12 +336,14 @@ function add_cpus_frm_files(cpu_child) {
             cpus.push(cpu_child[i].get_name());
     for (let i in cpus) {
         selectors[i] = new CpufreqSelectorBase(cpus[i]);
-        box.add_actor(selectors[i].indicator.actor);
-        Main.panel._menus.addMenu(selectors[i].indicator.menu);
+        Main.panel.addToStatusArea(cpus[i], selectors[i].indicator);
+        // box.add_actor(selectors[i].indicator.actor);
+        // Main.panel._menus.addMenu(selectors[i].indicator.menu);
     }
     summary = new CpufreqSelector('cpu');
-    box.add_actor(summary.indicator.actor);
-    Main.panel._menus.addMenu(summary.indicator.menu);
+    Main.panel.addToStatusArea('cpu', summary.indicator);
+    // box.add_actor(summary.indicator.actor);
+    // Main.panel._menus.addMenu(summary.indicator.menu);
     apply_settings.call(this, 'cpus-hidden', function(sender, value) {
         let visible = [];
         for (let i in selectors)
@@ -361,9 +370,9 @@ function disable() {
 
 function main() {
     let panel = Main.panel._rightBox;
-    box = new St.BoxLayout({ pack_start: true });
-    panel.insert_child_at_index(box, 1);
-    panel.child_set(box, { y_fill: true });
+    // box = new St.BoxLayout({ pack_start: true });
+    // panel.insert_child_at_index(box, 1);
+    // panel.child_set(box, { y_fill: true });
     connect_to_schema('cpus-hidden', 'get_strv');
     connect_to_schema('digit-type', 'get_string');
     connect_to_schema('graph-width', 'get_int');
@@ -376,9 +385,6 @@ function main() {
     });
     FileUtils.listDirAsync(cpu_dir, Lang.bind(this, add_cpus_frm_files));
     let finish = GLib.get_monotonic_time();
-    global.log('cpufreq: finish @ ' + finish);
-    global.log('cpufreq: use ' + (finish - start));
-    log('cpufreq: use ' + (finish - start));
 }
 
 function init() {
